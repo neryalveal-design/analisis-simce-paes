@@ -28,35 +28,6 @@ def clasificar_puntaje(puntaje, tipo):
 
 # --- Subida de archivo ---
 st.title("📊 Análisis de Rendimiento SIMCE / PAES")
-
-# === CONSOLIDACIÓN DESDE ARCHIVO LECTOR ===
-st.subheader("📥 Consolidar desde archivo del lector de pruebas")
-
-archivo_lector = st.file_uploader("📁 Sube el archivo Excel original del lector", type=["xlsx"], key="lector")
-nombre_columna = st.text_input("✏️ Nombre para el puntaje extraído", value="Puntaje Ensayo")
-
-if archivo_lector and nombre_columna:
-    xls_lector = pd.ExcelFile(archivo_lector)
-    hoja = xls_lector.sheet_names[0]
-    df_lector = xls_lector.parse(hoja, header=None)
-
-    if df_lector.shape[1] >= 167:
-        df_extraido = df_lector.iloc[10:, [2, 166]].copy()
-        df_extraido.columns = ["Nombre Estudiante", nombre_columna]
-        df_extraido = df_extraido.dropna(how="all").reset_index(drop=True)
-
-        st.success("✅ Datos extraídos correctamente")
-        st.dataframe(df_extraido.head())
-
-        # Descargar como Excel limpio
-        import io
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-            df_extraido.to_excel(writer, index=False, sheet_name="Extraído")
-        excel_buffer.seek(0)
-        st.download_button("📥 Descargar Excel limpio", excel_buffer, file_name="extraido_consolidado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    else:
-        st.error("❌ El archivo no tiene la estructura esperada del lector de pruebas.")
 tipo_prueba = st.selectbox("🧪 Selecciona el tipo de prueba", ["SIMCE", "PAES"])
 archivo = st.file_uploader("📁 Sube archivo Excel", type=["xlsx"])
 
@@ -65,25 +36,9 @@ if archivo:
     hoja = st.selectbox("📄 Hoja (Curso)", xls.sheet_names)
     df = xls.parse(hoja)
 
-    
-    # --- Detección de estructura especial del lector de pruebas ---
-    estructura_especial = False
-    if df.shape[1] >= 166 and df.iloc[9, 2] == "NOMBRE ESTUDIANTE":
-        estructura_especial = True
-
-    if estructura_especial:
-        df = df[10:].copy()  # Saltar metadatos
-        df.columns = df.iloc[0]  # Usar fila 10 como encabezados
-        df = df[1:]  # Eliminar fila con encabezados
-        df = df.reset_index(drop=True)
-
-        col_nombres = df.columns[2]
-        col_puntajes = [df.columns[165]]
-    else:
-        # Detectar columnas automáticamente
-        col_nombres = next((col for col in df.columns if df[col].astype(str).str.contains(r"[A-Za-z]").sum() > 3), None)
-        col_puntajes = [col for col in df.columns if pd.to_numeric(df[col], errors='coerce').gt(100).sum() > 3]
-
+    # Detectar columnas
+    col_nombres = next((col for col in df.columns if df[col].astype(str).str.contains(r"[A-Za-z]").sum() > 3), None)
+    col_puntajes = [col for col in df.columns if pd.to_numeric(df[col], errors='coerce').gt(100).sum() > 3]
 
     if not col_nombres or not col_puntajes:
         st.error("❌ No se detectaron columnas válidas de nombres o puntajes.")
