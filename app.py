@@ -92,7 +92,8 @@ modo_analisis = st.radio("📂 Tipo de análisis", ["Ensayo único", "Consolidad
 
 
 
-# --- Análisis general de todos los cursos con orden correcto de colores ---
+
+# --- Análisis general de todos los cursos con orden y colores personalizados ---
 if st.checkbox("📊 Mostrar análisis general del liceo"):
     resultados_globales = []
     for hoja in xls.sheet_names:
@@ -110,15 +111,17 @@ if st.checkbox("📊 Mostrar análisis general del liceo"):
     if resultados_globales:
         df_global = pd.concat(resultados_globales)
         orden_categorias = ["Insuficiente", "Intermedio", "Adecuado"]
+        colores = {"Insuficiente": "red", "Intermedio": "green", "Adecuado": "blue"}
         df_global["Desempeño"] = pd.Categorical(df_global["Desempeño"], categories=orden_categorias, ordered=True)
         conteo_global = df_global.groupby(["Curso", "Desempeño"]).size().unstack(fill_value=0)[orden_categorias]
         st.subheader("📊 Panorama General del Liceo")
         st.dataframe(conteo_global)
 
         fig, ax = plt.subplots(figsize=(10, 5))
-        conteo_global.plot(kind="bar", stacked=True, ax=ax)
+        conteo_global.plot(kind="bar", stacked=True, ax=ax, color=[colores[nivel] for nivel in orden_categorias])
         ax.set_title("Distribución de Desempeño por Curso")
         ax.set_ylabel("Cantidad de Estudiantes")
+        ax.legend(title="Desempeño")
         st.pyplot(fig)
 
 
