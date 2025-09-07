@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -16,6 +17,15 @@ import zipfile
 st.set_page_config(layout="wide", page_title="Análisis SIMCE y PAES")
 
 HISTORICO_PATH = "historico.pkl"
+
+# --- Detectar si es archivo resumen por curso ---
+
+def es_archivo_resumen_por_curso(df):
+    return (
+        "Curso" in df.columns and
+        any("% Insuficiente" in col for col in df.columns) and
+        any("Promedio" in col for col in df.columns)
+    )
 
 # ------------------ Funciones auxiliares ------------------
 
@@ -205,13 +215,39 @@ if "historico" not in st.session_state:
 
 st.title("📊 Análisis SIMCE y PAES")
 
-# Subida múltiple
 archivos = st.file_uploader("Sube uno o más archivos Excel", type=["xlsx"], accept_multiple_files=True)
 
 if archivos:
     for archivo in archivos:
         try:
             df = pd.read_excel(archivo)
+
+        if es_archivo_resumen_por_curso(df):
+            st.success("Detectado archivo resumen por curso")
+
+            # Mostrar tabla
+            st.subheader("📋 Resumen por curso")
+            st.dataframe(df)
+
+            # Gráfico de promedio
+            st.subheader("📈 Promedio por curso")
+            fig1, ax1 = plt.subplots()
+            ax1.bar(df["Curso"], df["Promedio último"])
+            ax1.set_ylabel("Puntaje promedio")
+            ax1.set_title("Promedio último por curso")
+            st.pyplot(fig1)
+
+            # Gráfico de niveles por curso
+            st.subheader("📊 Distribución por nivel de desempeño")
+            niveles = ["% Insuficiente", "% Elemental", "% Avanzado"]
+            df_plot = df[["Curso"] + niveles].set_index("Curso")
+            fig2, ax2 = plt.subplots()
+            df_plot.plot(kind="bar", stacked=True, ax=ax2)
+            ax2.set_ylabel("Porcentaje")
+            ax2.set_title("Distribución por nivel")
+            st.pyplot(fig2)
+
+            continue  # Salta el análisis individual
             st.success(f"Archivo '{archivo.name}' cargado correctamente.")
             st.dataframe(df)
 
@@ -264,3 +300,74 @@ if archivos:
 
         except Exception as e:
             st.error(f"Error al procesar '{archivo.name}': {e}")
+
+# Mostrar consolidado
+consolidado = generar_consolidado_global(st.session_state.historico)
+
+# Filtro por año
+if not consolidado.empty and "Año" in consolidado.columns:
+    anios = sorted(consolidado["Año"].unique())
+    anio_sel = st.selectbox("Filtrar por año académico", anios)
+    consolidado = consolidado[consolidado["Año"] == anio_sel]
+
+# Reportes por estudiante
+st.subheader("🧍 Generar reporte PDF por estudiante")
+nombres_estudiantes = list(st.session_state.historico.keys())
+if nombres_estudiantes:
+    estudiante_sel = st.selectbox("Selecciona estudiante", nombres_estudiantes, key="pdf_estudiante")
+    registros = st.session_state.historico[estudiante_sel]
+    if st.button("📥 Generar PDF Individual"):
+        pdf_file = generar_pdf_estudiante(registros)
+        st.download_button("Descargar PDF", data=pdf_file, file_name=f"Reporte_{registros[0]['Nombre']}.pdf", mime="application/pdf")
+
+# Reporte por curso (único)
+st.subheader("📄 Generar reporte PDF por curso")
+if not consolidado.empty:
+    cursos = consolidado["Curso"].dropna().unique().tolist()
+    if cursos:
+        curso_pdf = st.selectbox("Curso", sorted(cursos), key="pdfcurso")
+        tipo_pdf = st.selectbox("Tipo de prueba", ["SIMCE", "PAES"], key="pdftipo")
+        df_pdf = consolidado[(consolidado["Curso"] == curso_pdf) & (consolidado["Tipo"] == tipo_pdf)]
+        if not df_pdf.empty and st.button("📥 Generar PDF"):
+            pdf_file = generar_pdf_curso(df_pdf, curso_pdf, tipo_pdf)
+            st.download_button("Descargar PDF", data=pdf_file, file_name=f"Reporte_{curso_pdf}_{tipo_pdf}.pdf", mime="application/pdf")
+
+# ZIP de todos los cursos
+st.subheader("📦 Exportar reportes por curso (masivo)")
+if not consolidado.empty:
+    tipo_zip = st.selectbox("Tipo de prueba", ["SIMCE", "PAES"], key="masivotipo")
+    if st.button("🗂️ Generar ZIP con todos los cursos"):
+        zip_file = generar_zip_reportes_por_curso(consolidado, tipo_zip)
+        st.download_button("📥 Descargar ZIP", data=zip_file, file_name=f"Reportes_Cursos_{tipo_zip}.zip", mime="application/zip")
+
+# Exportar a Excel
+st.subheader("📤 Exportar consolidado a Excel")
+if not consolidado.empty:
+    excel_file = exportar_excel_consolidado(consolidado)
+    st.download_button("📥 Descargar Excel", data=excel_file, file_name="Consolidado_SIMCE_PAES.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+# Exportar histórico
+st.subheader("📄 Exportar histórico")
+if st.button("📥 Descargar histórico (.pkl)"):
+    buffer = BytesIO()
+    pickle.dump(st.session_state.historico, buffer)
+    buffer.seek(0)
+    st.download_button("Descargar .pkl", data=buffer, file_name="historico.pkl", mime="application/octet-stream")
+
+if not consolidado.empty:
+    csv_buffer = BytesIO()
+    consolidado.to_csv(csv_buffer, index=False)
+    csv_buffer.seek(0)
+    st.download_button("📄 Descargar histórico (.csv)", data=csv_buffer, file_name="historico_consolidado.csv", mime="text/csv")
+
+# Administración
+st.subheader("🧹 Administración del histórico")
+if st.button("🗑️ Borrar histórico"):
+    confirmar = st.checkbox("✅ Confirmo que quiero borrar todo el histórico", key="confirm_borrar")
+    if confirmar:
+        st.session_state.historico = {}
+        if os.path.exists(HISTORICO_PATH):
+            os.remove(HISTORICO_PATH)
+        st.success("Histórico borrado correctamente.")
+    else:
+        st.warning("Marca la casilla de confirmación para borrar el histórico.")
