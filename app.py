@@ -160,22 +160,19 @@ def generar_pdf_curso(df_curso, curso, tipo_prueba):
     buffer.seek(0)
     return buffer
 
+from io import BytesIO
+
 def generar_pdf_estudiante(registros):
-    if not registros:
-        return None
-    estudiante = registros[0]["Nombre"]
     pdf = PDFReporte()
     pdf.add_page()
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"Reporte Individual - {estudiante}", ln=True)
-    pdf.ln(5)
-    pdf.set_font("Arial", "", 11)
+    pdf.set_font("Arial", size=12)
+
     for r in registros:
-        linea = f"Fecha: {r['Fecha']} | Prueba: {r['Prueba']} | Puntaje: {r['Puntaje']} | Desempeño: {r['Desempeño']}"
-        pdf.cell(0, 10, linea, ln=True)
-    buffer = BytesIO()
-    pdf.output(buffer)
-    buffer.seek(0)
+        pdf.cell(0, 10, f"{r['Fecha']} - {r['Prueba']} - {r['Curso']} - {r['Puntaje']} pts ({r['Desempeño']})", ln=True)
+
+    # Exportar como bytes para Streamlit
+    pdf_bytes = pdf.output(dest='S').encode('latin-1')
+    buffer = BytesIO(pdf_bytes)
     return buffer
 
 def generar_zip_reportes_por_curso(df_consolidado, tipo_prueba):
