@@ -28,35 +28,6 @@ def clasificar_puntaje(puntaje, tipo):
 
 # --- Subida de archivo ---
 st.title("📊 Análisis de Rendimiento SIMCE / PAES")
-
-# === CONSOLIDACIÓN DESDE ARCHIVO LECTOR ===
-st.subheader("📥 Consolidar desde archivo del lector de pruebas")
-
-archivo_lector = st.file_uploader("📁 Sube el archivo Excel original del lector", type=["xlsx"], key="lector")
-nombre_columna = st.text_input("✏️ Nombre para el puntaje extraído", value="Puntaje Ensayo")
-
-if archivo_lector and nombre_columna:
-    xls_lector = pd.ExcelFile(archivo_lector)
-    hoja = xls_lector.sheet_names[0]
-    df_lector = xls_lector.parse(hoja, header=None)
-
-    if df_lector.shape[1] >= 167:
-        df_extraido = df_lector.iloc[10:, [2, 166]].copy()
-        df_extraido.columns = ["Nombre Estudiante", nombre_columna]
-        df_extraido = df_extraido.dropna(how="all").reset_index(drop=True)
-
-        st.success("✅ Datos extraídos correctamente")
-        st.dataframe(df_extraido.head())
-
-        # Descargar como Excel limpio
-        import io
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
-            df_extraido.to_excel(writer, index=False, sheet_name="Extraído")
-        excel_buffer.seek(0)
-        st.download_button("📥 Descargar Excel limpio", excel_buffer, file_name="extraido_consolidado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    else:
-        st.error("❌ El archivo no tiene la estructura esperada del lector de pruebas.")
 tipo_prueba = st.selectbox("🧪 Selecciona el tipo de prueba", ["SIMCE", "PAES"])
 archivo = st.file_uploader("📁 Sube archivo Excel", type=["xlsx"])
 
