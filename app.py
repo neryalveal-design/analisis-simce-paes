@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -77,3 +78,19 @@ class PDFReporte(FPDF):
         self.set_y(-15)
         self.set_font("Arial", "I", 8)
         self.cell(0, 10, f"Página {self.page_no()}", 0, 0, "C")
+def main():
+    st.title("Análisis SIMCE y PAES")
+    archivo = st.file_uploader("Sube un archivo Excel", type=["xlsx"])
+
+    if archivo is not None:
+        try:
+            df = pd.read_excel(archivo)
+            st.success("Archivo cargado correctamente.")
+            st.dataframe(df)
+
+            # Aquí podrías incluir más lógica de análisis si ya tienes funciones definidas.
+        except Exception as e:
+            st.error(f"Error al leer el archivo: {e}")
+
+if __name__ == "__main__":
+    main()
