@@ -217,10 +217,44 @@ st.title("📊 Análisis SIMCE y PAES")
 
 archivos = st.file_uploader("Sube uno o más archivos Excel", type=["xlsx"], accept_multiple_files=True)
 
+
 if archivos:
     for archivo in archivos:
         try:
-                df = pd.read_excel(archivo)
+            df = pd.read_excel(archivo)
+
+            if es_archivo_resumen_por_curso(df):
+                st.success("Detectado archivo resumen por curso")
+
+                # Mostrar tabla
+                st.subheader("📋 Resumen por curso")
+                st.dataframe(df)
+
+                # Gráfico de promedio
+                st.subheader("📈 Promedio por curso")
+                fig1, ax1 = plt.subplots()
+                ax1.bar(df["Curso"], df["Promedio último"])
+                ax1.set_ylabel("Puntaje promedio")
+                ax1.set_title("Promedio último por curso")
+                st.pyplot(fig1)
+
+                # Gráfico de niveles por curso
+                st.subheader("📊 Distribución por nivel de desempeño")
+                niveles = ["% Insuficiente", "% Elemental", "% Avanzado"]
+                df_plot = df[["Curso"] + niveles].set_index("Curso")
+                fig2, ax2 = plt.subplots()
+                df_plot.plot(kind="bar", stacked=True, ax=ax2)
+                ax2.set_ylabel("Porcentaje")
+                ax2.set_title("Distribución por nivel")
+                st.pyplot(fig2)
+
+                continue  # Salta análisis individual
+
+            # (Análisis individual sigue aquí...)
+
+        except Exception as e:
+            st.error(f"Error al procesar '{archivo.name}': {e}")
+
 
             if es_archivo_resumen_por_curso(df):
                 st.success("Detectado archivo resumen por curso")
