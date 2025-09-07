@@ -2,12 +2,10 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import io
-from fpdf import FPDF
-import base64
 
-st.set_page_config(page_title="Análisis con Exportación a PDF", layout="wide")
+st.set_page_config(page_title="Análisis Educativo SIMCE / PAES", layout="wide")
 
+# --- Clasificación de puntajes ---
 def clasificar_puntaje(puntaje, tipo):
     if pd.isna(puntaje):
         return "Sin dato"
@@ -28,63 +26,60 @@ def clasificar_puntaje(puntaje, tipo):
             return "Adecuado"
     return "Desconocido"
 
-def exportar_pdf(df, imagenes, filename="informe.pdf"):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, "Informe de Desempeño Académico", ln=True, align="C")
-    pdf.ln(10)
-
-    for _, row in df.iterrows():
-        pdf.cell(0, 10, f"{row['Estudiante']}: {row['Puntaje']} - {row['Desempeño']}", ln=True)
-
-    for i, img in enumerate(imagenes):
-        pdf.add_page()
-        pdf.image(img, x=15, y=25, w=180)
-
-    buffer = io.BytesIO()
-    pdf.output(buffer)
-    b64 = base64.b64encode(buffer.getvalue()).decode()
-    href = f'<a href="data:application/pdf;base64,{b64}" download="{filename}">📄 Descargar PDF</a>'
-    return href
-
-st.title("📊 Análisis de Rendimiento + PDF")
-
-tipo_prueba = st.selectbox("Tipo de prueba", ["SIMCE", "PAES"])
-archivo = st.file_uploader("Sube archivo Excel", type=["xlsx"])
+# --- Subida de archivo ---
+st.title("📊 Análisis de Rendimiento SIMCE / PAES")
+tipo_prueba = st.selectbox("🧪 Selecciona el tipo de prueba", ["SIMCE", "PAES"])
+archivo = st.file_uploader("📁 Sube archivo Excel", type=["xlsx"])
 
 if archivo:
     xls = pd.ExcelFile(archivo)
-    hoja = st.selectbox("Selecciona la hoja", xls.sheet_names)
+    hoja = st.selectbox("📄 Hoja (Curso)", xls.sheet_names)
     df = xls.parse(hoja)
 
+    # Detectar columnas
     col_nombres = next((col for col in df.columns if df[col].astype(str).str.contains(r"[A-Za-z]").sum() > 3), None)
     col_puntajes = [col for col in df.columns if pd.to_numeric(df[col], errors='coerce').gt(100).sum() > 3]
 
     if not col_nombres or not col_puntajes:
-        st.error("No se detectaron nombres o puntajes.")
+        st.error("❌ No se detectaron columnas válidas de nombres o puntajes.")
     else:
         df["Estudiante"] = df[col_nombres]
-        ensayo = st.selectbox("Selecciona columna de puntaje", col_puntajes)
-        df["Puntaje"] = df[ensayo]
-        df["Desempeño"] = df["Puntaje"].apply(lambda x: clasificar_puntaje(x, tipo_prueba))
 
-        st.dataframe(df[["Estudiante", "Puntaje", "Desempeño"]])
+        st.subheader("📋 Tabla de resultados")
+        st.dataframe(df[["Estudiante"] + col_puntajes])
 
-        # Gráfico
-        st.subheader("📈 Distribución de desempeño")
-        conteo = df["Desempeño"].value_counts().reindex(["Insuficiente", "Intermedio", "Adecuado"], fill_value=0)
-        fig, ax = plt.subplots(figsize=(4,3))
-        conteo.plot(kind="bar", ax=ax)
-        ax.set_title("Distribución de Desempeño")
-        st.pyplot(fig)
+        # --- GRÁFICO DE CADA ENSAYO ---
+        for col in col_puntajes:
+            df[f"Desempeño {col}"] = df[col].apply(lambda x: clasificar_puntaje(x, tipo_prueba))
 
-        # Guardar imagen del gráfico
-        img_buffer = io.BytesIO()
-        fig.savefig(img_buffer, format="PNG")
-        img_buffer.seek(0)
+        st.subheader("📈 Gráficos de desempeño por ensayo")
+        for col in col_puntajes:
+            conteo = df[f"Desempeño {col}"].value_counts().reindex(["Insuficiente", "Intermedio", "Adecuado"], fill_value=0)
+            fig, ax = plt.subplots(figsize=(4,3))
+            conteo.plot(kind="bar", ax=ax)
+            ax.set_title(f"Desempeño - {col}")
+            ax.set_ylabel("Estudiantes")
+            ax.set_xlabel("Nivel")
+            plt.xticks(rotation=0)
+            st.pyplot(fig)
 
-        # Descargar PDF
-        if st.button("📥 Exportar informe en PDF"):
-            link = exportar_pdf(df[["Estudiante", "Puntaje", "Desempeño"]], [img_buffer])
-            st.markdown(link, unsafe_allow_html=True)
+        # --- ANÁLISIS DE TRAYECTORIA ---
+        if len(col_puntajes) > 1:
+            st.subheader("📉 Trayectoria de estudiantes")
+            estudiante = st.selectbox("Selecciona estudiante", df["Estudiante"].unique())
+            datos = df[df["Estudiante"] == estudiante][col_puntajes].T
+            datos.columns = ["Puntaje"]
+            fig, ax = plt.subplots(figsize=(5,3))
+            datos.plot(ax=ax, marker="o", legend=False)
+            ax.set_title(f"Trayectoria de {estudiante}")
+            ax.set_ylabel("Puntaje")
+            ax.set_xlabel("Ensayo")
+            ax.set_ylim([min(200, datos["Puntaje"].min()-20), max(1000, datos["Puntaje"].max()+20)])
+            plt.xticks(rotation=45)
+            st.pyplot(fig)
+
+        # --- TOP 15 PEOR RENDIMIENTO ---
+        st.subheader("⚠️ Top 15 puntajes más bajos")
+        col_puntaje_mostrar = st.selectbox("Selecciona ensayo para ranking", col_puntajes)
+        peor_15 = df.sort_values(by=col_puntaje_mostrar).head(15)
+        st.dataframe(peor_15[["Estudiante", col_puntaje_mostrar]])
