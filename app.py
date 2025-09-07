@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,12 +9,10 @@ from fpdf import FPDF
 from PIL import Image
 import unicodedata
 import re
+import tempfile
 
 st.set_page_config(layout="wide", page_title="Análisis SIMCE y PAES")
 
-# -------------------------------
-# UTILS
-# -------------------------------
 def clasificar_puntaje(puntaje, tipo):
     if tipo == "SIMCE":
         if puntaje <= 250:
@@ -69,9 +68,6 @@ def generar_consolidado_global(historico):
             })
     return pd.DataFrame(consolidado)
 
-# -------------------------------
-# PDF UTILS
-# -------------------------------
 class PDFReporte(FPDF):
     def header(self):
         self.set_font("Arial", "B", 12)
@@ -83,21 +79,6 @@ class PDFReporte(FPDF):
         self.set_font("Arial", "I", 8)
         self.cell(0, 10, f"Página {self.page_no()}", 0, 0, "C")
 
-def generar_grafico_estudiante(nombre, fechas, puntajes):
-    fig, ax = plt.subplots()
-    ax.plot(fechas, puntajes, marker='o')
-    ax.set_title(f"Evolución – {nombre}")
-    ax.set_ylabel("Puntaje")
-    ax.set_xlabel("Fecha")
-    fig.tight_layout()
-    img_bytes = BytesIO()
-    plt.savefig(img_bytes, format='png')
-    img_bytes.seek(0)
-    plt.close(fig)
-    return img_bytes
-
-import tempfile
-
 def grafico_evolucion(df):
     fig, ax = plt.subplots()
     df.plot(ax=ax, marker='o')
@@ -105,12 +86,10 @@ def grafico_evolucion(df):
     ax.set_ylabel("Puntaje Promedio")
     ax.set_xlabel("Fecha")
     fig.tight_layout()
-
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
         plt.savefig(tmpfile.name, format='png')
         plt.close(fig)
         return tmpfile.name
-
 
 def grafico_distribucion(df):
     fig, ax = plt.subplots()
@@ -118,12 +97,10 @@ def grafico_distribucion(df):
     ax.set_title("Distribución de Niveles de Desempeño por Curso (%)")
     ax.set_ylabel("Porcentaje")
     fig.tight_layout()
-
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
         plt.savefig(tmpfile.name, format='png')
         plt.close(fig)
         return tmpfile.name
-
 
 def exportar_dashboard_pdf(df_filtrado, df_evolucion, df_niveles, ranking_top, ranking_bottom, filtros):
     pdf = PDFReporte()
@@ -178,102 +155,3 @@ Filtros Aplicados:
     pdf.output(output)
     output.seek(0)
     return output
-
-# -------------------------------
-# INTERFAZ STREAMLIT
-# -------------------------------
-st.title("📊 Análisis de Puntajes SIMCE y PAES")
-archivos = st.file_uploader("Sube uno o más archivos Excel generados por el sistema", type=["xlsx"], accept_multiple_files=True)
-
-historico = {}
-
-if archivos:
-    for archivo in archivos:
-        fecha_archivo = archivo.name.split("_")[-1].replace(".xlsx", "")
-        xls = pd.ExcelFile(archivo)
-
-        for hoja in xls.sheet_names:
-            df = xls.parse(hoja)
-            nombre_col = detectar_columna_nombres(df)
-            puntaje_col = detectar_columna_puntajes(df)
-
-            if not nombre_col or not puntaje_col:
-                continue
-
-            df_filtrado = df[[nombre_col, puntaje_col]].dropna()
-            df_filtrado.columns = ["Nombre", "Puntaje"]
-
-            tipo_prueba = "SIMCE" if df_filtrado["Puntaje"].max() < 600 else "PAES"
-            df_filtrado["Desempeño"] = df_filtrado["Puntaje"].apply(lambda x: clasificar_puntaje(x, tipo_prueba))
-            df_filtrado["Curso"] = hoja
-            df_filtrado["Fecha"] = fecha_archivo
-            df_filtrado["Nombre Normalizado"] = df_filtrado["Nombre"].apply(normalizar_nombre)
-
-            for _, row in df_filtrado.iterrows():
-                key = row["Nombre Normalizado"]
-                if key not in historico:
-                    historico[key] = []
-                historico[key].append({
-                    "Nombre": row["Nombre"],
-                    "Curso": row["Curso"],
-                    "Fecha": row["Fecha"],
-                    "Puntaje": row["Puntaje"],
-                    "Desempeño": row["Desempeño"],
-                    "Prueba": tipo_prueba
-                })
-
-    df_dashboard = generar_consolidado_global(historico)
-    st.header("📊 Dashboard General")
-    cursos = df_dashboard["Curso"].unique()
-    fechas = df_dashboard["Fecha"].unique()
-    tipos = df_dashboard["Tipo"].unique()
-
-    col1, col2, col3 = st.columns(3)
-    curso_sel = col1.multiselect("Cursos", cursos, default=list(cursos))
-    fecha_sel = col2.multiselect("Fechas", fechas, default=list(fechas))
-    tipo_sel = col3.multiselect("Tipo de Prueba", tipos, default=list(tipos))
-
-    df_filtrado = df_dashboard[
-        df_dashboard["Curso"].isin(curso_sel) &
-        df_dashboard["Fecha"].isin(fecha_sel) &
-        df_dashboard["Tipo"].isin(tipo_sel)
-    ]
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Estudiantes Evaluados", len(df_filtrado))
-    col2.metric("Promedio General", f"{df_filtrado['Puntaje'].mean():.2f}")
-    try:
-        nivel = df_filtrado["Desempeño"].value_counts(normalize=True).idxmax()
-    except:
-        nivel = "N/A"
-    col3.metric("Nivel más frecuente", nivel)
-
-    st.markdown("### Evolución de Puntajes por Curso")
-    df_evol = df_filtrado.groupby(["Fecha", "Curso"])["Puntaje"].mean().unstack()
-    st.line_chart(df_evol)
-
-    st.markdown("### Distribución de Niveles de Desempeño")
-    dist = df_filtrado.groupby(["Curso", "Desempeño"]).size().unstack(fill_value=0)
-    niveles_pct = dist.div(dist.sum(axis=1), axis=0) * 100
-    st.bar_chart(niveles_pct)
-
-    st.markdown("### Ranking de Estudiantes")
-    ranking = df_filtrado.groupby("Nombre")["Puntaje"].mean().reset_index().sort_values("Puntaje", ascending=False)
-    top_n = 5
-    col1, col2 = st.columns(2)
-    col1.subheader("🔝 Mejores")
-    col1.dataframe(ranking.head(top_n))
-    col2.subheader("🔻 Peores")
-    col2.dataframe(ranking.tail(top_n))
-
-    st.markdown("### 📄 Descargar PDF del Dashboard")
-    filtros_aplicados = {"cursos": curso_sel, "fechas": fecha_sel, "tipos": tipo_sel}
-    pdf_dashboard = exportar_dashboard_pdf(df_filtrado, df_evol, niveles_pct, ranking.head(top_n), ranking.tail(top_n), filtros_aplicados)
-
-    st.download_button(
-        label="📥 Descargar PDF",
-        data=pdf_dashboard,
-        file_name=f"Dashboard_Liceo_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.pdf",
-        mime="application/pdf"
-    )
-
