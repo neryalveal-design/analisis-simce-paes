@@ -220,83 +220,83 @@ archivos = st.file_uploader("Sube uno o más archivos Excel", type=["xlsx"], acc
 if archivos:
     for archivo in archivos:
         try:
-            df = pd.read_excel(archivo)
+                df = pd.read_excel(archivo)
 
-        if es_archivo_resumen_por_curso(df):
-            st.success("Detectado archivo resumen por curso")
+            if es_archivo_resumen_por_curso(df):
+                st.success("Detectado archivo resumen por curso")
 
-            # Mostrar tabla
-            st.subheader("📋 Resumen por curso")
-            st.dataframe(df)
+                # Mostrar tabla
+                st.subheader("📋 Resumen por curso")
+                st.dataframe(df)
 
-            # Gráfico de promedio
-            st.subheader("📈 Promedio por curso")
-            fig1, ax1 = plt.subplots()
-            ax1.bar(df["Curso"], df["Promedio último"])
-            ax1.set_ylabel("Puntaje promedio")
-            ax1.set_title("Promedio último por curso")
-            st.pyplot(fig1)
+                # Gráfico de promedio
+                st.subheader("📈 Promedio por curso")
+                fig1, ax1 = plt.subplots()
+                ax1.bar(df["Curso"], df["Promedio último"])
+                ax1.set_ylabel("Puntaje promedio")
+                ax1.set_title("Promedio último por curso")
+                st.pyplot(fig1)
 
-            # Gráfico de niveles por curso
-            st.subheader("📊 Distribución por nivel de desempeño")
-            niveles = ["% Insuficiente", "% Elemental", "% Avanzado"]
-            df_plot = df[["Curso"] + niveles].set_index("Curso")
-            fig2, ax2 = plt.subplots()
-            df_plot.plot(kind="bar", stacked=True, ax=ax2)
-            ax2.set_ylabel("Porcentaje")
-            ax2.set_title("Distribución por nivel")
-            st.pyplot(fig2)
+                # Gráfico de niveles por curso
+                st.subheader("📊 Distribución por nivel de desempeño")
+                niveles = ["% Insuficiente", "% Elemental", "% Avanzado"]
+                df_plot = df[["Curso"] + niveles].set_index("Curso")
+                fig2, ax2 = plt.subplots()
+                df_plot.plot(kind="bar", stacked=True, ax=ax2)
+                ax2.set_ylabel("Porcentaje")
+                ax2.set_title("Distribución por nivel")
+                st.pyplot(fig2)
 
-            continue  # Salta el análisis individual
-            st.success(f"Archivo '{archivo.name}' cargado correctamente.")
-            st.dataframe(df)
+                continue  # Salta el análisis individual
+                st.success(f"Archivo '{archivo.name}' cargado correctamente.")
+                st.dataframe(df)
 
-            col_nombres = detectar_columna_nombres(df)
-            col_puntajes = detectar_columna_puntajes(df)
-            col_curso = detectar_columna_curso(df)
-            col_anio = detectar_columna_anio(df)
+                col_nombres = detectar_columna_nombres(df)
+                col_puntajes = detectar_columna_puntajes(df)
+                col_curso = detectar_columna_curso(df)
+                col_anio = detectar_columna_anio(df)
 
-            if not col_nombres or not col_puntajes:
-                st.error(f"'{archivo.name}': No se detectaron nombres o puntajes.")
-                continue
+                if not col_nombres or not col_puntajes:
+                    st.error(f"'{archivo.name}': No se detectaron nombres o puntajes.")
+                    continue
 
-            if not col_curso:
-                col_curso = st.selectbox(f"Selecciona columna de curso para '{archivo.name}'", df.columns, key=f"curso_{archivo.name}")
+                if not col_curso:
+                    col_curso = st.selectbox(f"Selecciona columna de curso para '{archivo.name}'", df.columns, key=f"curso_{archivo.name}")
 
-            if not col_anio:
-                col_anio = st.selectbox(f"Selecciona columna de año académico para '{archivo.name}' (opcional)", ["(Ninguna)"] + df.columns.tolist(), key=f"anio_{archivo.name}")
-                if col_anio == "(Ninguna)":
-                    col_anio = None
+                if not col_anio:
+                    col_anio = st.selectbox(f"Selecciona columna de año académico para '{archivo.name}' (opcional)", ["(Ninguna)"] + df.columns.tolist(), key=f"anio_{archivo.name}")
+                    if col_anio == "(Ninguna)":
+                        col_anio = None
 
-            tipo_prueba = st.selectbox(f"Selecciona tipo de prueba para '{archivo.name}'", ["SIMCE", "PAES"], key=f"tipo_{archivo.name}")
+                tipo_prueba = st.selectbox(f"Selecciona tipo de prueba para '{archivo.name}'", ["SIMCE", "PAES"], key=f"tipo_{archivo.name}")
 
-            df["Nombre Normalizado"] = df[col_nombres].apply(normalizar_nombre)
-            df["Puntaje"] = pd.to_numeric(df[col_puntajes], errors='coerce')
-            df["Desempeño"] = df["Puntaje"].apply(lambda x: clasificar_puntaje(x, tipo_prueba))
-            df["Prueba"] = tipo_prueba
-            df["Fecha"] = datetime.today().strftime('%Y-%m-%d')
-            df["Curso"] = df[col_curso].astype(str)
-            df["Año"] = df[col_anio].astype(str) if col_anio else str(datetime.today().year)
+                df["Nombre Normalizado"] = df[col_nombres].apply(normalizar_nombre)
+                df["Puntaje"] = pd.to_numeric(df[col_puntajes], errors='coerce')
+                df["Desempeño"] = df["Puntaje"].apply(lambda x: clasificar_puntaje(x, tipo_prueba))
+                df["Prueba"] = tipo_prueba
+                df["Fecha"] = datetime.today().strftime('%Y-%m-%d')
+                df["Curso"] = df[col_curso].astype(str)
+                df["Año"] = df[col_anio].astype(str) if col_anio else str(datetime.today().year)
 
-            for _, row in df.iterrows():
-                nombre_key = row["Nombre Normalizado"]
-                if nombre_key not in st.session_state.historico:
-                    st.session_state.historico[nombre_key] = []
+                for _, row in df.iterrows():
+                    nombre_key = row["Nombre Normalizado"]
+                    if nombre_key not in st.session_state.historico:
+                        st.session_state.historico[nombre_key] = []
 
-                registro = {
-                    "Nombre": row[col_nombres],
-                    "Curso": row["Curso"],
-                    "Fecha": row["Fecha"],
-                    "Puntaje": row["Puntaje"],
-                    "Desempeño": row["Desempeño"],
-                    "Prueba": row["Prueba"],
-                    "Año": row["Año"]
-                }
+                    registro = {
+                        "Nombre": row[col_nombres],
+                        "Curso": row["Curso"],
+                        "Fecha": row["Fecha"],
+                        "Puntaje": row["Puntaje"],
+                        "Desempeño": row["Desempeño"],
+                        "Prueba": row["Prueba"],
+                        "Año": row["Año"]
+                    }
 
-                if registro not in st.session_state.historico[nombre_key]:
-                    st.session_state.historico[nombre_key].append(registro)
+                    if registro not in st.session_state.historico[nombre_key]:
+                        st.session_state.historico[nombre_key].append(registro)
 
-            guardar_historico_en_archivo(st.session_state.historico)
+                guardar_historico_en_archivo(st.session_state.historico)
 
         except Exception as e:
             st.error(f"Error al procesar '{archivo.name}': {e}")
