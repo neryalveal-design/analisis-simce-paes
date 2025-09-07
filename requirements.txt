@@ -1,9 +1,6 @@
 streamlit
 pandas
-numpy
 matplotlib
+openpyxl
 fpdf
 Pillow
-openpyxl
-XlsxWriter
-unicodedata2
