@@ -96,6 +96,8 @@ def generar_grafico_estudiante(nombre, fechas, puntajes):
     plt.close(fig)
     return img_bytes
 
+import tempfile
+
 def grafico_evolucion(df):
     fig, ax = plt.subplots()
     df.plot(ax=ax, marker='o')
@@ -103,11 +105,12 @@ def grafico_evolucion(df):
     ax.set_ylabel("Puntaje Promedio")
     ax.set_xlabel("Fecha")
     fig.tight_layout()
-    buf = BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    plt.close(fig)
-    return buf
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+        plt.savefig(tmpfile.name, format='png')
+        plt.close(fig)
+        return tmpfile.name
+
 
 def grafico_distribucion(df):
     fig, ax = plt.subplots()
@@ -115,11 +118,12 @@ def grafico_distribucion(df):
     ax.set_title("Distribución de Niveles de Desempeño por Curso (%)")
     ax.set_ylabel("Porcentaje")
     fig.tight_layout()
-    buf = BytesIO()
-    plt.savefig(buf, format='png')
-    buf.seek(0)
-    plt.close(fig)
-    return buf
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+        plt.savefig(tmpfile.name, format='png')
+        plt.close(fig)
+        return tmpfile.name
+
 
 def exportar_dashboard_pdf(df_filtrado, df_evolucion, df_niveles, ranking_top, ranking_bottom, filtros):
     pdf = PDFReporte()
