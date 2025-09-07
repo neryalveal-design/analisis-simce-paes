@@ -36,9 +36,25 @@ if archivo:
     hoja = st.selectbox("📄 Hoja (Curso)", xls.sheet_names)
     df = xls.parse(hoja)
 
-    # Detectar columnas
-    col_nombres = next((col for col in df.columns if df[col].astype(str).str.contains(r"[A-Za-z]").sum() > 3), None)
-    col_puntajes = [col for col in df.columns if pd.to_numeric(df[col], errors='coerce').gt(100).sum() > 3]
+    
+    # --- Detección de estructura especial del lector de pruebas ---
+    estructura_especial = False
+    if df.shape[1] >= 166 and df.iloc[9, 2] == "NOMBRE ESTUDIANTE":
+        estructura_especial = True
+
+    if estructura_especial:
+        df = df[10:].copy()  # Saltar metadatos
+        df.columns = df.iloc[0]  # Usar fila 10 como encabezados
+        df = df[1:]  # Eliminar fila con encabezados
+        df = df.reset_index(drop=True)
+
+        col_nombres = df.columns[2]
+        col_puntajes = [df.columns[165]]
+    else:
+        # Detectar columnas automáticamente
+        col_nombres = next((col for col in df.columns if df[col].astype(str).str.contains(r"[A-Za-z]").sum() > 3), None)
+        col_puntajes = [col for col in df.columns if pd.to_numeric(df[col], errors='coerce').gt(100).sum() > 3]
+
 
     if not col_nombres or not col_puntajes:
         st.error("❌ No se detectaron columnas válidas de nombres o puntajes.")
